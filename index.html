@@ -4,9 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0c0e13">
+<meta name="description" content="Упражнения с анимацией, программы, режим тренировки и статистика. Работает без интернета.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GymApp">
+<meta name="format-detection" content="telephone=no">
 <title>GymApp — тренировки</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
 <style>
 :root{
   --bg:#0c0e13;--surface:#141821;--surface2:#1a1f2b;--surface3:#232a3a;--line:#262c3b;--line2:#323a4d;
@@ -29,6 +38,10 @@
   color-scheme:light;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[data-act]{cursor:pointer}
+.modal{cursor:auto}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.btn,.chip,.nav a,.wo-pill,.chk{touch-action:manipulation;-webkit-user-select:none;user-select:none}
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:Manrope,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -39,7 +52,7 @@ svg{display:block}
 .icon.lg{width:24px;height:24px}
 
 /* ---------- layout ---------- */
-.topbar{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.topbar{position:sticky;top:0;z-index:30;padding-top:env(safe-area-inset-top);background:var(--bg);background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
 .topbar-in{max-width:1120px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:12px 16px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;letter-spacing:-.02em}
 .brand-mark{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;color:#1d0e02;box-shadow:0 6px 18px rgba(255,122,26,.35)}
@@ -53,15 +66,16 @@ svg{display:block}
 .nav a.on .icon{color:var(--accent)}
 .nav .live{position:relative}
 .nav .live::after{content:"";position:absolute;top:8px;right:8px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
-main{max-width:1120px;margin:0 auto;padding:20px 16px 120px}
+main{max-width:1120px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-right)) 120px max(16px,env(safe-area-inset-left))}
 @media (max-width:860px){
   .topbar{backdrop-filter:none;-webkit-backdrop-filter:none;background:var(--bg)}
   .wo-main .stage svg.fig[data-big]{max-height:30vh}
-  .topbar .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;justify-content:space-around;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  .topbar .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;justify-content:space-around;background:var(--surface);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
   .nav a{flex-direction:column;gap:2px;font-size:11px;padding:6px 4px;min-width:62px;border-radius:10px}
   .nav a.on{background:transparent}
   .nav .live::after{top:4px;right:16px}
-  main{padding-bottom:150px}
+  main{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+  .input,select.input,textarea.input,.mini-f input,.mini-f select,.num{font-size:16px}
 }
 
 /* ---------- generic ---------- */
@@ -263,7 +277,7 @@ details.how[open] summary .icon:last-child{transform:rotate(180deg)}
 details.how .in{padding:0 14px 14px}
 
 /* rest dock */
-.dock{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:45;width:min(520px,calc(100% - 24px));background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line2);border-radius:20px;box-shadow:var(--shadow);padding:12px 14px;display:flex;align-items:center;gap:12px}
+.dock{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:45;width:min(520px,calc(100% - 24px));background:var(--surface);background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line2);border-radius:20px;box-shadow:var(--shadow);padding:12px 14px;display:flex;align-items:center;gap:12px}
 @media (max-width:860px){.dock{bottom:calc(76px + env(safe-area-inset-bottom))}}
 .dock .ring{position:relative;width:56px;height:56px;flex:none}
 .dock .ring svg{width:56px;height:56px;transform:rotate(-90deg)}
@@ -350,6 +364,12 @@ details.how .in{padding:0 14px 14px}
 .sess-ex{padding:10px 0;border-top:1px solid var(--line)}
 .sess-ex:first-child{border-top:0}
 .sess-sets{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.install{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:var(--r);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);background:var(--accent-soft);margin-bottom:14px}
+.install img{width:44px;height:44px;border-radius:11px;flex:none}
+.ios-steps{counter-reset:s;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.ios-steps li{display:flex;gap:12px;align-items:center}
+.ios-steps li::before{counter-increment:s;content:counter(s);width:28px;height:28px;border-radius:9px;background:var(--accent-soft);color:var(--accent);font-weight:800;display:grid;place-items:center;flex:none}
+.ios-share{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;background:var(--surface3);vertical-align:middle;color:#3b82f6}
 .sess-sets span{background:var(--surface2);padding:3px 8px;border-radius:8px;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
 </style>
 </head>
@@ -367,7 +387,8 @@ details.how .in{padding:0 14px 14px}
     </div>
   </div>
 </header>
-<main id="view"></main>
+<main id="view"><noscript><div style="padding:24px;max-width:520px">
+<h2>Нужен браузер с JavaScript</h2><p>Похоже, файл открыт в режиме предпросмотра (например, из «Файлов» или мессенджера на iPhone) — там приложение не запускается. Открой его по ссылке в Safari или Chrome.</p></div></noscript></main>
 <div id="dock"></div>
 <div id="modal-root"></div>
 <div id="toast"></div>
@@ -1463,7 +1484,7 @@ VIEWS.home = () => {
     ['Регулярность', '1–2 тренировки каждую неделю дают больше, чем редкие «подвиги».']
   ];
   const tp = tips[Math.floor(now / 864e5) % tips.length];
-  return `${hero}
+  return `${installBanner()}${hero}
   <div class="grid g4 mt">
     <div class="kpi"><div class="lb">${ic('flame', 'sm')} Тренировок за 30 дней</div><div class="vl">${s30.length}</div><div class="sub">всего: ${DB.sessions.length}</div></div>
     <div class="kpi"><div class="lb">${ic('target', 'sm')} Серия недель</div><div class="vl">${streakWeeks()}<small>${plural(streakWeeks(), 'неделя', 'недели', 'недель')}</small></div><div class="sub">подряд с тренировками</div></div>
@@ -1569,7 +1590,7 @@ VIEWS.program = id => {
 function editItem(i, n, total) {
   const ex = exById(i.ex); if (!ex) return '';
   const u = ex.k === 't' ? 'сек' : ex.k === 'c' ? 'мин' : 'повт';
-  const f = (k, lbl, v, w = '') => `<label class="mini-f ${w}"><span>${lbl}</span><input type="number" inputmode="numeric" min="0" data-pi="${n}" data-k="${k}" value="${v}"></label>`;
+  const f = (k, lbl, v, w = '') => `<label class="mini-f ${w}"><span>${lbl}</span><input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-pi="${n}" data-k="${k}" value="${v}"></label>`;
   return `<div class="edit-item">${stage(i.ex)}<div style="min-width:0"><div class="nm">${n + 1}. ${esc(ex.n)}</div>
     <div class="edit-fields">${f('sets', 'Подходы', i.sets)}${f('min', 'От, ' + u, i.min)}${f('max', 'До, ' + u, i.max)}${f('rest', 'Отдых, с', i.rest, 'w')}
     <label class="mini-f" style="flex:1;min-width:120px"><span>Заметка</span><input style="width:100%" data-pi="${n}" data-k="note" value="${esc(i.note || '')}"></label></div></div>
@@ -1615,7 +1636,7 @@ function woSets(item, ex, cur) {
   const cols = ex.k === 'w' ? '<th>Вес, кг</th><th>Повторы</th>' : ex.k === 'r' ? '<th>Повторы</th><th>+ Вес, кг</th>' : ex.k === 't' ? '<th>Секунды</th><th>Таймер</th>' : '<th>Минуты</th><th>Таймер</th>';
   const rows = item.sets.map((s, j) => {
     const pv = last && last.sets[j] ? setShort(ex, last.sets[j]) : '—';
-    const inp = (k, val, ph) => `<input class="num" type="number" inputmode="decimal" min="0" step="any" data-wi="${cur}" data-wj="${j}" data-k="${k}" value="${val ?? ''}" placeholder="${ph}">`;
+    const inp = (k, val, ph) => `<input class="num" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" data-wi="${cur}" data-wj="${j}" data-k="${k}" value="${val ?? ''}" placeholder="${ph}">`;
     let c1, c2;
     const repPh = (last && last.sets[j] && last.sets[j].r) || item.max;
     if (ex.k === 'w') { c1 = inp('w', s.w, (last && last.sets[j] && last.sets[j].w) || 0); c2 = inp('r', s.r, repPh); }
@@ -1799,7 +1820,7 @@ VIEWS.settings = () => {
     <div class="mt">${tg('autoRest', 'Автотаймер отдыха', 'Запускать отдых после отметки подхода')}${tg('sound', 'Звук', 'Сигнал в конце отдыха и таймера')}${tg('vibrate', 'Вибрация', 'На телефонах, которые это поддерживают')}</div></div>
   <div class="card"><div class="card-h"><h3>Данные</h3></div><p class="muted" style="margin-top:0;font-size:14px">Сделай резервную копию, чтобы перенести тренировки на другое устройство или не потерять их при очистке браузера.</p>
     <div class="row wrap"><button class="btn" data-act="export">${ic('download')} Экспорт</button><button class="btn" data-act="import">${ic('upload')} Импорт</button></div>
-    <div class="row wrap mt"><button class="btn ghost" data-act="reset-progs">${ic('refresh')} Вернуть готовые программы</button><button class="btn danger" data-act="wipe">${ic('trash')} Удалить все данные</button></div></div></div>`;
+    <div class="row wrap mt"><button class="btn ghost" data-act="reset-progs">${ic('refresh')} Вернуть готовые программы</button><button class="btn danger" data-act="wipe">${ic('trash')} Удалить все данные</button></div></div>${installCard()}</div>`;
 };
 
 /* =====================================================================
@@ -2015,7 +2036,7 @@ document.addEventListener('input', e => {
   if (t.id === 'pickq') { UI.pick.q = t.value; UI.pick.typing = true; const pk = UI.pick; const list = $('#picklist'); const tmp = document.createElement('div'); tmp.innerHTML = pickerHTML(); list.innerHTML = tmp.querySelector('#picklist').innerHTML; UI.pick = pk; Anim.scan(list); return; }
   if (t.dataset.pf) { const p = progById(parseRoute().arg); p[t.dataset.pf] = t.value; save(); return; }
   if (t.dataset.pi != null) { const p = progById(parseRoute().arg), i = p.items[+t.dataset.pi], k = t.dataset.k; i[k] = k === 'note' ? t.value : Math.max(0, parseInt(t.value) || 0); if (k === 'sets') i.sets = Math.max(1, i.sets); save(); return; }
-  if (t.dataset.wi != null) { const s = DB.active.items[+t.dataset.wi].sets[+t.dataset.wj], k = t.dataset.k; const v = t.value.replace(',', '.'); if (k === 'm') s.t = v === '' ? '' : Math.round(parseFloat(v) * 60); else s[k] = v === '' ? '' : parseFloat(v); save(); return; }
+  if (t.dataset.wi != null) { const s = DB.active.items[+t.dataset.wi].sets[+t.dataset.wj], k = t.dataset.k; const f = parseFloat(t.value.replace(',', '.')); if (k === 'm') s.t = isNaN(f) ? '' : Math.round(f * 60); else s[k] = isNaN(f) ? '' : f; save(); return; }
 });
 document.addEventListener('change', e => {
   const t = e.target, a = t.dataset.actChange;
@@ -2075,12 +2096,73 @@ function makeDemo() {
   }
 }
 
+
+/* =====================================================================
+   6. УСТАНОВКА И ОФЛАЙН (PWA), особенности iOS
+   ===================================================================== */
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_STANDALONE = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const IS_WEB = /^https?:$/.test(location.protocol);
+let installEvt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (['home', 'settings'].includes(parseRoute().name)) render(); });
+window.addEventListener('appinstalled', () => { installEvt = null; toast('Приложение установлено'); render(); });
+
+function canInstall() { return IS_WEB && !IS_STANDALONE(); }
+function installBanner() {
+  if (!canInstall() || DB.settings.hideInstall) return '';
+  return `<div class="install"><img src="icons/icon-192.png" alt=""><div style="flex:1;min-width:0"><div style="font-weight:800">Установи на телефон</div><div class="muted" style="font-size:13px">Работает без интернета</div></div>
+    <button class="btn primary sm" data-act="install">Установить</button><button class="btn ghost icon-only sm" data-act="install-hide" title="Скрыть">${ic('x', 'sm')}</button></div>`;
+}
+function installCard() {
+  let state;
+  if (!IS_WEB) state = `<p class="muted" style="margin-top:0;font-size:14px">Сейчас приложение открыто как файл. Чтобы установить его и пользоваться без интернета, открой его по ссылке на сайт (например, GitHub Pages) в Safari или Chrome.</p>`;
+  else if (IS_STANDALONE()) state = `<div class="tip">${ic('check')}<div><b>Приложение установлено.</b> Оно работает без интернета, данные хранятся на этом устройстве.</div></div>`;
+  else state = `<p class="muted" style="margin-top:0;font-size:14px">Добавь приложение на экран «Домой»: оно откроется на весь экран и будет работать без интернета.</p><button class="btn primary" data-act="install">${ic('download')} Установить</button>`;
+  const off = IS_WEB && 'serviceWorker' in navigator ? `<div class="faint mt" style="font-size:12.5px" id="offState">${navigator.serviceWorker.controller ? '✓ Сохранено для работы офлайн' : 'Сохраняю для работы офлайн…'}</div>` : '';
+  return `<div class="card"><div class="card-h"><h3>${ic('download')} Приложение на телефоне</h3></div>${state}${off}</div>`;
+}
+function installModal() {
+  if (installEvt) { installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; render(); }); return; }
+  const shareIc = `<span class="ios-share"><svg class="icon sm" viewBox="0 0 24 24"><path d="M12 3v12M7 8l5-5 5 5M5 12v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8"/></svg></span>`;
+  const body = IS_IOS ? `<ol class="ios-steps">
+      <li><span>Открой эту страницу в <b>Safari</b> (в других браузерах на iPhone пункта может не быть).</span></li>
+      <li><span>Нажми кнопку «Поделиться» ${shareIc} внизу экрана.</span></li>
+      <li><span>Пролистай меню и выбери <b>«На экран „Домой“»</b>.</span></li>
+      <li><span>Нажми <b>«Добавить»</b> — на экране появится иконка GymApp.</span></li></ol>
+      <div class="tip mt">${ic('info')}<div>Установленное приложение хранит данные отдельно от Safari. Если ты уже тренировался в браузере — сделай <b>Экспорт</b> в настройках и <b>Импорт</b> в установленном приложении.</div></div>`
+    : `<ol class="ios-steps"><li><span>Открой меню браузера <b>⋮</b> (в Chrome — справа вверху).</span></li><li><span>Выбери <b>«Установить приложение»</b> или <b>«Добавить на главный экран»</b>.</span></li><li><span>Подтверди установку — иконка GymApp появится на рабочем столе.</span></li></ol>`;
+  openModal(`${mHead('Установка на телефон')}<div class="modal-b">${body}</div><div class="modal-f"><button class="btn primary" data-act="close">Понятно</button></div>`);
+}
+ACT.install = installModal;
+ACT['install-hide'] = () => { DB.settings.hideInstall = true; save(); render(); };
+
+// iOS: звук разрешён только после касания — «разблокируем» аудио на первом же тапе
+function unlockAudio() {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const b = AC.createBuffer(1, 1, 22050), s = AC.createBufferSource(); s.buffer = b; s.connect(AC.destination); s.start(0);
+  } catch (e) { }
+}
+document.addEventListener('pointerdown', unlockAudio, { once: true, capture: true });
+document.addEventListener('touchend', unlockAudio, { once: true, capture: true });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && AC && AC.state !== 'running') AC.resume().catch(() => { }); });
+
+function registerSW() {
+  if (!IS_WEB || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => {
+    const el = $('#offState'); if (el) el.textContent = '✓ Сохранено для работы офлайн';
+  }).catch(e => console.warn('SW', e));
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
+}
+
 /* ---------- запуск ---------- */
 load();
 applyTheme();
 matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', () => { if (DB.settings.theme === 'auto') { applyTheme(); render(); } });
 if (DB.active) keepAwake(true);
 render();
+registerSW();
 
 </script>
 </body>
