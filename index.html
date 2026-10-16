@@ -1328,10 +1328,10 @@ function load() {
   try { raw = JSON.parse(localStorage.getItem(KEY)); } catch (e) { raw = null; }
   DB = SAN.obj(raw) ? sanitizeDB(raw) : freshDB();
 }
-let saveT = 0;
+let saveT = 0, saveFailed = false;
 function save(now) {
   clearTimeout(saveT);
-  const f = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); } catch (e) { console.warn(e); } };
+  const f = () => { try { localStorage.setItem(KEY, JSON.stringify(DB)); saveFailed = false; } catch (e) { console.warn(e); if (!saveFailed && typeof toast === 'function') toast('Не удалось сохранить: память браузера заполнена. Сделай экспорт данных.'); saveFailed = true; } };
   if (now) f(); else saveT = setTimeout(f, 150);
 }
 window.addEventListener('beforeunload', () => save(true));
@@ -1347,7 +1347,7 @@ const progById = id => DB.programs.find(p => p.id === id);
 /* ---------- форматирование ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // цвет программы попадает в атрибут style — пропускаем только hex и CSS-переменные
-const safeColor = c => /^#[0-9a-fA-F]{3,8}$|^var\(--[\w-]+\)$/.test(String(c ?? '')) ? c : 'var(--accent)';
+const safeColor = c => { const s = typeof c === 'string' ? c : ''; return /^#[0-9a-fA-F]{3,8}$|^var\(--[\w-]+\)$/.test(s) ? s : 'var(--accent)'; };
 const fmtN = n => (Math.round(n * 10) / 10).toLocaleString('ru-RU');
 const fmtKg = n => n >= 10000 ? (n / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' т' : Math.round(n).toLocaleString('ru-RU') + ' кг';
 function fmtDur(sec, long) {
@@ -1610,7 +1610,7 @@ function exList() {
   return `<div class="page-head"><div><h1>Упражнения</h1><p>${allEx().length} ${plural(allEx().length, 'упражнение', 'упражнения', 'упражнений')} с анимацией и пошаговой техникой</p></div>
     <button class="btn" data-act="custom-new">${ic('plus')} Своё упражнение</button></div>
   <div class="row wrap mb" style="gap:10px"><div class="search" style="flex:1;min-width:220px">${ic('search')}<input class="input" id="exq" placeholder="Поиск: присед, спина, бицепс…" value="${esc(UI.exQ)}"></div>
-    <select class="input" style="width:auto" data-act-change="ex-eq"><option value="all">Любой инвентарь</option>${eqs.map(e => `<option ${UI.exE === e ? 'selected' : ''}>${e}</option>`).join('')}</select></div>
+    <select class="input" style="width:auto" data-act-change="ex-eq"><option value="all">Любой инвентарь</option>${eqs.map(e => `<option value="${esc(e)}" ${UI.exE === e ? 'selected' : ''}>${esc(e)}</option>`).join('')}</select></div>
   <div class="chips mb"><button class="chip ${UI.exG === 'all' ? 'on' : ''}" data-act="ex-g" data-g="all">Все</button>${Object.entries(GROUPS).map(([k, v]) => `<button class="chip ${UI.exG === k ? 'on' : ''}" data-act="ex-g" data-g="${k}">${v}</button>`).join('')}</div>
   <div id="exgrid">${exGrid()}</div>`;
 }
@@ -2135,6 +2135,7 @@ document.addEventListener('toggle', e => { if (e.target.dataset && e.target.data
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); if (e.key === 'Enter' && e.target.classList.contains('num')) e.target.blur(); });
 $('#importFile').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
+  if (f.size > 20 * 1024 * 1024) { toast('Файл слишком большой для резервной копии'); e.target.value = ''; return; }
   const r = new FileReader();
   r.onload = () => {
     let clean;
