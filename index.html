@@ -1237,11 +1237,96 @@ const PROG_COLORS = ['#ff7a1a', '#38bdf8', '#a78bfa', '#34d399', '#f472b6', '#fa
 const KEY = 'gymapp.v1';
 let DB;
 function freshDB() { return { v: 1, programs: DEFAULT_PROGRAMS(), sessions: [], custom: [], active: null, settings: { theme: 'dark', sound: true, vibrate: true, autoRest: true } }; }
+/* ---------- проверка схемы: и для импорта, и для localStorage ----------
+   Входные данные не доверенные: собираем БД заново только из известных полей,
+   приводим типы и ограничиваем значения. Всё остальное отбрасывается. */
+const SAN = {
+  arr: (v, max = 100000) => Array.isArray(v) ? v.slice(0, max) : [],
+  obj: v => v && typeof v === 'object' && !Array.isArray(v),
+  id: v => typeof v === 'string' && /^[\w-]{1,64}$/.test(v) ? v : null,
+  str: (v, max = 300) => typeof v === 'string' ? v.slice(0, max) : typeof v === 'number' && Number.isFinite(v) ? String(v) : '',
+  num: (v, min, max, def = 0) => { const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN; return Number.isFinite(n) ? clamp(n, min, max) : def; },
+  int: (v, min, max, def) => Math.round(SAN.num(v, min, max, def)),
+  bool: (v, def) => typeof v === 'boolean' ? v : def,
+  ts: v => SAN.num(v, 0, 8.64e15, 0),
+  // значение в подходе: число или '' (ещё не введено — только в идущей тренировке)
+  val: (v, max, allowEmpty) => allowEmpty && (v === '' || v == null) ? '' : SAN.num(v, 0, max, allowEmpty ? '' : 0)
+};
+function sanSet(s, live) {
+  if (!SAN.obj(s)) return null;
+  const o = {};
+  for (const [k, max] of [['w', 2000], ['r', 10000], ['t', 86400]]) {
+    if (live) o[k] = SAN.val(s[k], max, true);
+    else if (s[k] != null && s[k] !== '') o[k] = SAN.num(s[k], 0, max);
+  }
+  if (live) { o.done = SAN.bool(s.done, false); if (s.ts != null) o.ts = SAN.ts(s.ts); }
+  return o;
+}
+function sanProgram(p) {
+  if (!SAN.obj(p)) return null;
+  const items = SAN.arr(p.items, 200).map(i => {
+    if (!SAN.obj(i) || !SAN.id(i.ex)) return null;
+    return { ex: i.ex, sets: SAN.int(i.sets, 1, 50, 3), min: SAN.int(i.min, 0, 100000, 10), max: SAN.int(i.max, 0, 100000, 12), rest: SAN.int(i.rest, 0, 3600, 90), note: SAN.str(i.note, 200) };
+  }).filter(Boolean);
+  const o = { id: SAN.id(p.id) || uid(), name: SAN.str(p.name, 120) || 'Программа', desc: SAN.str(p.desc, 500), color: safeColor(p.color), items };
+  if (SAN.id(p.pair)) o.pair = p.pair;
+  if (p.builtin === true) o.builtin = true;
+  return o;
+}
+function sanCustom(e) {
+  if (!SAN.obj(e)) return null;
+  const id = SAN.id(e.id), n = SAN.str(e.n, 120).trim();
+  if (!id || !id.startsWith('c_') || !n) return null; // свои упражнения всегда c_…, чтобы не подменить встроенные
+  const k = ['w', 'r', 't', 'c'].includes(e.k) ? e.k : 'w';
+  const d = SAN.arr(e.d, 4), def = k === 't' ? [3, 20, 40, 60] : k === 'c' ? [1, 10, 20, 60] : [3, 10, 12, 90];
+  const strs = (v, max) => SAN.arr(v, max).map(s => SAN.str(s, 500)).filter(Boolean);
+  const steps = strs(e.steps, 30);
+  return { id, custom: true, n, g: Object.prototype.hasOwnProperty.call(GROUPS, e.g) ? e.g : 'legs', k,
+    d: [SAN.int(d[0], 1, 50, def[0]), SAN.int(d[1], 0, 100000, def[1]), SAN.int(d[2], 0, 100000, def[2]), SAN.int(d[3], 0, 3600, def[3])],
+    lvl: SAN.int(e.lvl, 1, 3, 1), eq: strs(e.eq, 10).map(s => s.slice(0, 40)), m: SAN.str(e.m, 300) || '—',
+    steps: steps.length ? steps : ['Описание не добавлено.'], err: strs(e.err, 30), tip: SAN.str(e.tip, 1000) };
+}
+function sanSession(s) {
+  if (!SAN.obj(s) || !SAN.id(s.id)) return null;
+  const start = SAN.ts(s.start);
+  const items = SAN.arr(s.items, 200).map(i => SAN.obj(i) && SAN.id(i.ex) ? { ex: i.ex, sets: SAN.arr(i.sets, 100).map(x => sanSet(x, false)).filter(Boolean) } : null).filter(i => i && i.sets.length);
+  if (!start || !items.length) return null;
+  return { id: s.id, programId: SAN.id(s.programId), name: SAN.str(s.name, 120) || 'Тренировка', start, end: Math.max(start, SAN.ts(s.end)), items };
+}
+function sanActive(a) {
+  if (!SAN.obj(a) || !SAN.id(a.id) || !SAN.ts(a.start)) return null;
+  const items = SAN.arr(a.items, 200).map(i => {
+    if (!SAN.obj(i) || !SAN.id(i.ex)) return null;
+    const sets = SAN.arr(i.sets, 100).map(x => sanSet(x, true)).filter(Boolean);
+    return sets.length ? { ex: i.ex, min: SAN.int(i.min, 0, 100000, 10), max: SAN.int(i.max, 0, 100000, 12), rest: SAN.int(i.rest, 0, 3600, 90), note: SAN.str(i.note, 200), sets } : null;
+  }).filter(Boolean);
+  const o = { id: a.id, programId: SAN.id(a.programId), name: SAN.str(a.name, 120) || 'Тренировка', start: SAN.ts(a.start), items, cur: SAN.int(a.cur, 0, Math.max(0, items.length - 1), 0), rest: null, sw: null };
+  if (SAN.obj(a.rest)) o.rest = { end: SAN.ts(a.rest.end), total: SAN.num(a.rest.total, 1, 3600, 60), label: SAN.str(a.rest.label, 200) };
+  if (SAN.obj(a.sw) && items[a.sw.i] && items[a.sw.i].sets[a.sw.j]) o.sw = { i: SAN.int(a.sw.i, 0, 199, 0), j: SAN.int(a.sw.j, 0, 99, 0), start: SAN.ts(a.sw.start), target: SAN.num(a.sw.target, 0, 86400, 0), beeped: SAN.bool(a.sw.beeped, false) };
+  return o;
+}
+function sanSettings(s) {
+  const o = freshDB().settings;
+  if (!SAN.obj(s)) return o;
+  if (['dark', 'light', 'auto'].includes(s.theme)) o.theme = s.theme;
+  for (const k of ['sound', 'vibrate', 'autoRest']) o[k] = SAN.bool(s[k], o[k]);
+  if (s.hideInstall === true) o.hideInstall = true;
+  return o;
+}
+function sanitizeDB(d) {
+  const o = freshDB();
+  if (!SAN.obj(d)) return o;
+  if (Array.isArray(d.programs)) o.programs = SAN.arr(d.programs, 500).map(sanProgram).filter(Boolean);
+  o.custom = SAN.arr(d.custom, 1000).map(sanCustom).filter(Boolean);
+  o.sessions = SAN.arr(d.sessions).map(sanSession).filter(Boolean);
+  o.active = sanActive(d.active);
+  o.settings = sanSettings(d.settings);
+  return o;
+}
 function load() {
-  try { DB = JSON.parse(localStorage.getItem(KEY)); } catch (e) { DB = null; }
-  if (!DB || !DB.programs) DB = freshDB();
-  DB.settings = Object.assign(freshDB().settings, DB.settings || {});
-  DB.custom = DB.custom || []; DB.sessions = DB.sessions || [];
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(KEY)); } catch (e) { raw = null; }
+  DB = SAN.obj(raw) ? sanitizeDB(raw) : freshDB();
 }
 let saveT = 0;
 function save(now) {
@@ -1261,6 +1346,8 @@ const progById = id => DB.programs.find(p => p.id === id);
 
 /* ---------- форматирование ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// цвет программы попадает в атрибут style — пропускаем только hex и CSS-переменные
+const safeColor = c => /^#[0-9a-fA-F]{3,8}$|^var\(--[\w-]+\)$/.test(String(c ?? '')) ? c : 'var(--accent)';
 const fmtN = n => (Math.round(n * 10) / 10).toLocaleString('ru-RU');
 const fmtKg = n => n >= 10000 ? (n / 1000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' т' : Math.round(n).toLocaleString('ru-RU') + ' кг';
 function fmtDur(sec, long) {
@@ -1424,7 +1511,7 @@ function applyTheme() {
 
 /* ---------- общие кусочки ---------- */
 const lvlDots = l => `<span class="dots" title="${LEVELS[l]}">${[1, 2, 3].map(i => `<i class="${i <= l ? 'on' : ''}"></i>`).join('')}</span>`;
-const stage = (exId, big, ctl = '') => `<div class="stage">${figSVG(exId, big)}${big && exById(exId)?.anim?.label ? `<span class="stage-badge">${exById(exId).anim.label}</span>` : ''}${ctl}</div>`;
+const stage = (exId, big, ctl = '') => `<div class="stage">${figSVG(exId, big)}${big && exById(exId)?.anim?.label ? `<span class="stage-badge">${esc(exById(exId).anim.label)}</span>` : ''}${ctl}</div>`;
 const stageCtl = () => `<div class="stage-ctl"><button class="btn sm" data-act="anim-speed" title="Скорость">1×</button><button class="btn sm icon-only" data-act="anim-toggle" title="Пауза">${ic('pause', 'sm')}</button></div>`;
 const exKindLabel = k => ({ w: 'Вес × повторы', r: 'Повторы', t: 'На время', c: 'Кардио' }[k]);
 function howBlock(ex) {
@@ -1569,7 +1656,7 @@ VIEWS.programs = () => `<div class="page-head"><div><h1>Программы</h1><
     <tr><td>1 раз</td><td class="muted">Чередуй: на этой неделе А, на следующей Б, потом снова А и так далее. Приложение само подскажет, какая следующая.</td></tr></table></div>`;
 function progCard(p) {
   const shown = p.items.slice(0, 6);
-  return `<div class="card prog-card" style="--pc:${p.color || 'var(--accent)'}"><span class="bar"></span>
+  return `<div class="card prog-card" style="--pc:${safeColor(p.color)}"><span class="bar"></span>
     <div class="row" style="align-items:flex-start"><div style="flex:1;min-width:0"><h3>${esc(p.name)}</h3><div class="faint" style="font-size:13px;margin-top:4px">${esc(p.desc || '')}</div></div></div>
     <div class="row wrap" style="gap:6px;margin-top:10px"><span class="tag">${ic('layers', 'sm')} ${p.items.length}</span><span class="tag">${ic('clock', 'sm')} ≈ ${estMinutes(p)} мин</span>${progGroups(p).slice(0, 4).map(g => `<span class="tag">${GROUPS[g]}</span>`).join('')}</div>
     <div class="prog-list">${shown.map(i => { const ex = exById(i.ex); return ex ? `<div class="it"><b>${esc(ex.n)}</b><span>${targetText(i, ex)}</span></div>` : ''; }).join('')}${p.items.length > 6 ? `<div class="it faint">и ещё ${p.items.length - 6}…</div>` : ''}</div>
@@ -1610,7 +1697,7 @@ function pickerHTML() {
 VIEWS.workout = () => {
   const a = DB.active;
   if (!a) return `<div class="page-head"><div><h1>Начать тренировку</h1><p>Выбери программу — или начни свободную тренировку и добавляй упражнения по ходу</p></div></div>
-    <div class="grid g2">${DB.programs.map(p => `<div class="card prog-card" style="--pc:${p.color}"><span class="bar"></span><div class="row"><div style="flex:1"><h3>${esc(p.name)}</h3><div class="faint" style="font-size:13px">${p.items.length} ${plural(p.items.length, 'упражнение', 'упражнения', 'упражнений')} · ≈ ${estMinutes(p)} мин${nextProgram() === p ? ' · <b style="color:var(--accent)">рекомендуем</b>' : ''}</div></div><button class="btn primary" data-act="start" data-id="${p.id}">${ic('play')} Начать</button></div></div>`).join('')}
+    <div class="grid g2">${DB.programs.map(p => `<div class="card prog-card" style="--pc:${safeColor(p.color)}"><span class="bar"></span><div class="row"><div style="flex:1"><h3>${esc(p.name)}</h3><div class="faint" style="font-size:13px">${p.items.length} ${plural(p.items.length, 'упражнение', 'упражнения', 'упражнений')} · ≈ ${estMinutes(p)} мин${nextProgram() === p ? ' · <b style="color:var(--accent)">рекомендуем</b>' : ''}</div></div><button class="btn primary" data-act="start" data-id="${p.id}">${ic('play')} Начать</button></div></div>`).join('')}
     <div class="card" style="border-style:dashed"><div class="row"><div style="flex:1"><h3>Свободная тренировка</h3><div class="faint" style="font-size:13px">Без программы — добавляй упражнения сам</div></div><button class="btn" data-act="start" data-id="">${ic('plus')} Начать</button></div></div></div>`;
   const cur = clamp(a.cur, 0, a.items.length - 1);
   const item = a.items[cur];
@@ -1927,7 +2014,7 @@ function sessModal(id) {
 function addToProgModal(exId) {
   const ex = exById(exId);
   openModal(`${mHead('Добавить в программу')}<div class="modal-b"><p class="muted" style="margin-top:0">${esc(ex.n)} · ${ex.d[0]} × ${range(ex.d[1], ex.d[2])}</p>
-    ${DB.programs.map(p => `<div class="list-row" data-act="atp" data-id="${p.id}" data-ex="${exId}"><div class="ic" style="background:${p.color}22;color:${p.color}">${ic('prog')}</div><div style="flex:1"><div class="tt">${esc(p.name)}</div><div class="st">${p.items.length} упр.${p.items.some(i => i.ex === exId) ? ' · уже есть' : ''}</div></div>${ic('plus')}</div>`).join('')}
+    ${DB.programs.map(p => `<div class="list-row" data-act="atp" data-id="${p.id}" data-ex="${exId}"><div class="ic" style="background:color-mix(in srgb,${safeColor(p.color)} 14%,transparent);color:${safeColor(p.color)}">${ic('prog')}</div><div style="flex:1"><div class="tt">${esc(p.name)}</div><div class="st">${p.items.length} упр.${p.items.some(i => i.ex === exId) ? ' · уже есть' : ''}</div></div>${ic('plus')}</div>`).join('')}
     <div class="list-row" data-act="atp" data-id="__new" data-ex="${exId}"><div class="ic">${ic('plus')}</div><div class="tt">Новая программа</div></div></div>`);
 }
 function customModal() {
@@ -2049,7 +2136,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 $('#importFile').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
   const r = new FileReader();
-  r.onload = () => { try { const d = JSON.parse(r.result); if (!d.programs || !d.sessions) throw 0; confirmBox(`Заменить текущие данные резервной копией? В ней ${d.sessions.length} тренировок и ${d.programs.length} программ.`, 'Импортировать', () => { DB = Object.assign(freshDB(), d); DB.settings = Object.assign(freshDB().settings, d.settings || {}); resetExMap(); save(true); applyTheme(); render(); toast('Данные импортированы'); }, false); } catch (err) { toast('Не удалось прочитать файл'); } };
+  r.onload = () => {
+    let clean;
+    try { const d = JSON.parse(r.result); if (!d || !Array.isArray(d.programs) || !Array.isArray(d.sessions)) throw 0; clean = sanitizeDB(d); } catch (err) { toast('Не удалось прочитать файл'); return; }
+    confirmBox(`Заменить текущие данные резервной копией? В ней ${clean.sessions.length} ${plural(clean.sessions.length, 'тренировка', 'тренировки', 'тренировок')} и ${clean.programs.length} ${plural(clean.programs.length, 'программа', 'программы', 'программ')}.`, 'Импортировать', () => { DB = clean; resetExMap(); save(true); applyTheme(); render(); toast('Данные импортированы'); }, false);
+  };
   r.readAsText(f); e.target.value = '';
 });
 
