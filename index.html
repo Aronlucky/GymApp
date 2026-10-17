@@ -364,6 +364,19 @@ details.how .in{padding:0 14px 14px}
 .sess-ex{padding:10px 0;border-top:1px solid var(--line)}
 .sess-ex:first-child{border-top:0}
 .sess-sets{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.alts-h{font-size:12px;font-weight:800;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.alts{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.wo-main>*,.ex-detail>*{min-width:0}
+@media (max-width:560px){.alt{width:118px}}
+.alt{position:relative;flex:none;width:136px;border:1px solid var(--line);border-radius:14px;padding:7px;background:var(--surface2);transition:border-color .15s,transform .1s}
+.alt:hover{border-color:var(--accent)}
+.alt:active{transform:scale(.97)}
+.alt .stage{border-radius:10px}
+.alt .rs{font-size:10.5px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
+.alt .nm{font-size:12.5px;font-weight:700;line-height:1.25;margin-top:2px}
+.alt .lp{font-size:11px;color:var(--faint);margin-top:3px}
+.alt .sw-ic{position:absolute;top:12px;right:12px;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:color-mix(in srgb,var(--surface) 85%,transparent);color:var(--accent)}
+.swapped{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 12px;border-radius:12px;background:var(--accent-soft);color:var(--accent);font-size:13px;font-weight:700}
 .install{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:var(--r);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);background:var(--accent-soft);margin-bottom:14px}
 .install img{width:44px;height:44px;border-radius:11px;flex:none}
 .ios-steps{counter-reset:s;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
@@ -1207,6 +1220,65 @@ const EX = [
 // рука ловит голеностоп в растяжке квадрицепса
 EX.find(e => e.id === 'quad_stretch').anim.frames.forEach(f => { const J = solveSide(f); f.aN = { ik: add(J.AN, [2, 2]) }; });
 
+/* ---------- аналоги: чем заменить упражнение, если тренажёр занят или хочется другого ----------
+   [id, причина] — первым идёт самый близкий по работе мышц вариант */
+const ALTS = {
+  goblet_squat: [['leg_press', 'в тренажёре'], ['bw_squat', 'проще'], ['bulgarian', 'сложнее'], ['bb_squat', 'со штангой']],
+  rdl_db: [['hyperext', 'в тренажёре'], ['glute_bridge', 'проще'], ['leg_curl', 'в тренажёре'], ['deadlift', 'со штангой']],
+  lunge_db: [['step_up', 'проще'], ['bulgarian', 'сложнее'], ['goblet_squat', 'на двух ногах'], ['leg_press', 'в тренажёре']],
+  leg_curl: [['rdl_db', 'с гантелями'], ['glute_bridge', 'без тренажёра'], ['hyperext', 'другой тренажёр']],
+  leg_ext: [['goblet_squat', 'с гантелью'], ['leg_press', 'в тренажёре'], ['step_up', 'без тренажёра']],
+  leg_press: [['goblet_squat', 'с гантелью'], ['bulgarian', 'с гантелями'], ['bb_squat', 'со штангой'], ['leg_ext', 'изолированно']],
+  bw_squat: [['goblet_squat', 'с весом'], ['step_up', 'на скамью'], ['glute_bridge', 'проще']],
+  bb_squat: [['goblet_squat', 'проще'], ['leg_press', 'в тренажёре'], ['bulgarian', 'с гантелями']],
+  glute_bridge: [['hyperext', 'в тренажёре'], ['rdl_db', 'с гантелями'], ['step_up', 'стоя']],
+  calf_raise: [['step_up', 'на скамью'], ['jumping_jacks', 'в движении']],
+  bulgarian: [['lunge_db', 'проще'], ['step_up', 'проще'], ['goblet_squat', 'на двух ногах']],
+  step_up: [['lunge_db', 'на полу'], ['bulgarian', 'сложнее'], ['goblet_squat', 'на двух ногах']],
+  hip_abd: [['side_plank', 'без тренажёра'], ['glute_bridge', 'на полу'], ['step_up', 'стоя']],
+  lat_pulldown: [['pullup', 'сложнее'], ['cable_row', 'другой блок'], ['db_row', 'с гантелью']],
+  db_row: [['cable_row', 'на блоке'], ['lat_pulldown', 'на блоке'], ['bb_row', 'со штангой']],
+  cable_row: [['db_row', 'с гантелью'], ['lat_pulldown', 'верхний блок'], ['bb_row', 'со штангой']],
+  pullup: [['lat_pulldown', 'проще'], ['dead_hang', 'начать с виса'], ['db_row', 'с гантелью']],
+  hyperext: [['rdl_db', 'с гантелями'], ['glute_bridge', 'на полу'], ['deadlift', 'со штангой']],
+  bb_row: [['db_row', 'проще'], ['cable_row', 'на блоке'], ['lat_pulldown', 'на блоке']],
+  deadlift: [['rdl_db', 'с гантелями'], ['hyperext', 'в тренажёре'], ['glute_bridge', 'проще']],
+  reverse_fly: [['face_pull', 'на блоке'], ['cable_row', 'верх спины'], ['lat_raise', 'с гантелями']],
+  pec_deck: [['db_fly', 'с гантелями'], ['chest_press', 'в тренажёре'], ['db_bench', 'жим гантелей'], ['pushup', 'без снарядов']],
+  db_bench: [['chest_press', 'в тренажёре'], ['bench_press', 'со штангой'], ['incline_db', 'под углом'], ['pushup', 'без снарядов']],
+  pushup: [['knee_pushup', 'проще'], ['db_bench', 'с весом'], ['chest_press', 'в тренажёре']],
+  knee_pushup: [['pushup', 'сложнее'], ['chest_press', 'в тренажёре'], ['db_bench', 'с гантелями']],
+  incline_db: [['db_bench', 'на ровной скамье'], ['chest_press', 'в тренажёре'], ['pushup', 'без снарядов']],
+  bench_press: [['db_bench', 'с гантелями'], ['chest_press', 'в тренажёре'], ['pushup', 'без снарядов']],
+  chest_press: [['db_bench', 'с гантелями'], ['pec_deck', 'сведение'], ['pushup', 'без снарядов']],
+  db_fly: [['pec_deck', 'в тренажёре'], ['db_bench', 'жим'], ['pushup', 'без снарядов']],
+  db_press: [['lat_raise', 'легче'], ['front_raise', 'легче'], ['incline_db', 'грудь и плечи']],
+  lat_raise: [['db_press', 'базовое'], ['front_raise', 'передняя дельта'], ['face_pull', 'на блоке']],
+  front_raise: [['db_press', 'базовое'], ['lat_raise', 'средняя дельта'], ['incline_db', 'грудь и плечи']],
+  face_pull: [['reverse_fly', 'в тренажёре'], ['lat_raise', 'с гантелями'], ['cable_row', 'верх спины']],
+  shrugs: [['face_pull', 'на блоке'], ['reverse_fly', 'в тренажёре'], ['deadlift', 'со штангой']],
+  machine_curl: [['db_curl', 'с гантелями'], ['hammer_curl', 'с гантелями']],
+  french_press: [['oh_triceps', 'сидя'], ['pushdown', 'на блоке'], ['bench_dips', 'без снарядов']],
+  db_curl: [['hammer_curl', 'другой хват'], ['machine_curl', 'в тренажёре']],
+  hammer_curl: [['db_curl', 'другой хват'], ['machine_curl', 'в тренажёре']],
+  pushdown: [['french_press', 'с гантелей'], ['oh_triceps', 'с гантелей'], ['bench_dips', 'без снарядов']],
+  bench_dips: [['pushdown', 'на блоке'], ['french_press', 'с гантелей'], ['knee_pushup', 'отжимания']],
+  oh_triceps: [['french_press', 'лёжа'], ['pushdown', 'на блоке'], ['bench_dips', 'без снарядов']],
+  plank: [['dead_bug', 'проще'], ['side_plank', 'на боку'], ['crunch', 'в движении']],
+  knee_raise: [['leg_raise', 'на полу'], ['crunch', 'проще'], ['dead_bug', 'проще']],
+  crunch: [['dead_bug', 'бережно к спине'], ['leg_raise', 'нижний пресс'], ['plank', 'статика']],
+  side_plank: [['plank', 'на предплечьях'], ['dead_bug', 'проще']],
+  dead_bug: [['plank', 'статика'], ['crunch', 'скручивания'], ['leg_raise', 'сложнее']],
+  leg_raise: [['knee_raise', 'на турнике'], ['crunch', 'проще'], ['dead_bug', 'проще']],
+  treadmill: [['bike', 'велотренажёр'], ['jumping_jacks', 'без тренажёра']],
+  bike: [['treadmill', 'дорожка'], ['jumping_jacks', 'без тренажёра']],
+  jumping_jacks: [['treadmill', 'дорожка'], ['bike', 'велотренажёр']],
+  joint_warmup: [['jumping_jacks', 'активнее'], ['treadmill', 'ходьба']],
+  dead_hang: [['ham_stretch', 'растяжка'], ['quad_stretch', 'растяжка']],
+  ham_stretch: [['quad_stretch', 'перед бедра'], ['dead_hang', 'спина']],
+  quad_stretch: [['ham_stretch', 'зад бедра'], ['dead_hang', 'спина']]
+};
+
 /* =====================================================================
    3. ДАННЫЕ: программы, хранилище, статистика
    ===================================================================== */
@@ -1298,7 +1370,10 @@ function sanActive(a) {
   const items = SAN.arr(a.items, 200).map(i => {
     if (!SAN.obj(i) || !SAN.id(i.ex)) return null;
     const sets = SAN.arr(i.sets, 100).map(x => sanSet(x, true)).filter(Boolean);
-    return sets.length ? { ex: i.ex, min: SAN.int(i.min, 0, 100000, 10), max: SAN.int(i.max, 0, 100000, 12), rest: SAN.int(i.rest, 0, 3600, 90), note: SAN.str(i.note, 200), sets } : null;
+    if (!sets.length) return null;
+    const o = { ex: i.ex, min: SAN.int(i.min, 0, 100000, 10), max: SAN.int(i.max, 0, 100000, 12), rest: SAN.int(i.rest, 0, 3600, 90), note: SAN.str(i.note, 200), sets };
+    if (SAN.id(i.orig) && SAN.obj(i.origT)) { o.orig = i.orig; o.origT = { min: SAN.int(i.origT.min, 0, 100000, 10), max: SAN.int(i.origT.max, 0, 100000, 12), rest: SAN.int(i.origT.rest, 0, 3600, 90), note: SAN.str(i.origT.note, 200) }; }
+    return o;
   }).filter(Boolean);
   const o = { id: a.id, programId: SAN.id(a.programId), name: SAN.str(a.name, 120) || 'Тренировка', start: SAN.ts(a.start), items, cur: SAN.int(a.cur, 0, Math.max(0, items.length - 1), 0), rest: null, sw: null };
   if (SAN.obj(a.rest)) o.rest = { end: SAN.ts(a.rest.end), total: SAN.num(a.rest.total, 1, 3600, 60), label: SAN.str(a.rest.label, 200) };
@@ -1532,6 +1607,27 @@ function setShort(ex, s) {
   return `${fmtN(+s.w || 0)} × ${s.r || 0}`;
 }
 
+// аналоги: сначала подобранные вручную, затем (для своих упражнений) — из той же группы с похожими мышцами
+function altsFor(exId, n = 4) {
+  const ex = exById(exId); if (!ex) return [];
+  const out = (ALTS[exId] || []).filter(([id]) => exById(id)).map(([id, why]) => ({ id, why }));
+  if (out.length < 3) {
+    const mus = new Set(ex.anim?.hl || []), have = new Set([exId, ...out.map(o => o.id)]);
+    allEx().filter(e => e.g === ex.g && !have.has(e.id))
+      .map(e => ({ e, score: (e.anim?.hl || []).filter(m => mus.has(m)).length + (e.k === ex.k ? 0.5 : 0) }))
+      .sort((a, b) => b.score - a.score).slice(0, 3 - out.length)
+      .forEach(({ e }) => out.push({ id: e.id, why: (e.eq || [])[0] ? String(e.eq[0]).toLowerCase() : GROUPS[e.g] }));
+  }
+  return out.slice(0, n);
+}
+function altsBlock(exId, mode) {
+  const list = altsFor(exId); if (!list.length) return '';
+  return `<div class="alts">${list.map(a => { const e = exById(a.id), l = lastPerf(a.id);
+    const inner = `${stage(a.id)}<div class="rs">${esc(a.why)}</div><div class="nm">${esc(e.n)}</div>${l && e.k === 'w' ? `<div class="lp">был: ${fmtN(Math.max(...l.sets.map(s => +s.w || 0)))} кг</div>` : ''}`;
+    return mode === 'swap' ? `<div class="alt" data-act="wo-swap" data-id="${a.id}" title="Заменить на это упражнение">${inner}<span class="sw-ic">${ic('refresh', 'sm')}</span></div>` : `<a class="alt" href="#/ex/${a.id}">${inner}</a>`;
+  }).join('')}</div>`;
+}
+
 /* =====================================================================
    ЭКРАНЫ
    ===================================================================== */
@@ -1636,6 +1732,7 @@ function exDetail(id) {
       <div class="row wrap mb"><button class="btn primary" data-act="add-to-prog" data-id="${id}">${ic('plus')} В программу</button><button class="btn" data-act="quick-start" data-id="${id}">${ic('play')} Тренировка с ним</button>
         ${ex.custom ? `<button class="btn danger" data-act="custom-del" data-id="${id}">${ic('trash')} Удалить</button>` : ''}</div>
       <div class="card">${howBlock(ex)}</div>
+      ${altsFor(id).length ? `<div class="card"><div class="card-h"><h3>${ic('refresh')} Аналоги</h3><span class="faint" style="font-size:13px">если тренажёр занят</span></div>${altsBlock(id, 'link')}</div>` : ''}
       <div class="card"><div class="card-h"><h3>${ic('chart')} Твой прогресс</h3>${b ? `<a class="btn ghost sm" data-act="stat-ex" data-id="${id}">График ${ic('right', 'sm')}</a>` : ''}</div>
         ${b ? `<div class="grid g3" style="gap:10px">${ex.k === 'w' ? `<div class="kpi"><div class="lb">Лучший вес</div><div class="vl">${fmtN(b.maxW)}<small>кг × ${b.maxWr}</small></div></div><div class="kpi"><div class="lb">1ПМ (оценка)</div><div class="vl">${fmtN(Math.round(b.best1))}<small>кг</small></div></div>` : ex.k === 't' || ex.k === 'c' ? `<div class="kpi"><div class="lb">Рекорд</div><div class="vl">${ex.k === 'c' ? fmtN(b.maxT / 60) + '<small>мин</small>' : b.maxT + '<small>сек</small>'}</div></div>` : `<div class="kpi"><div class="lb">Макс. повторов</div><div class="vl">${b.maxR}</div></div>`}
           <div class="kpi"><div class="lb">Тренировок</div><div class="vl">${b.count}</div></div></div>
@@ -1712,6 +1809,8 @@ VIEWS.workout = () => {
     <div class="card wa">${stage(item.ex, true, ex.anim ? stageCtl() : '')}
       <div class="mt"><div class="faint" style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Упражнение ${cur + 1} из ${a.items.length}${item.note ? ' · ' + esc(item.note) : ''}</div><h2 style="margin-top:4px">${esc(ex.n)}</h2></div>
       <div class="target"><span class="tag acc">${ic('target', 'sm')} ${targetText({ sets: item.sets.length, min: item.min, max: item.max }, ex)}${ex.per ? ' ' + ex.per : ''}</span><span class="tag">${ic('timer', 'sm')} отдых ${restText(item.rest)}</span><span class="tag">${esc(ex.m)}</span></div>
+      ${item.orig && exById(item.orig) ? `<div class="swapped mt">${ic('refresh', 'sm')}<span>Замена для «${esc(exById(item.orig).n)}»</span><span class="sp"></span><button class="btn sm ghost" data-act="wo-swap" data-id="${item.orig}">Вернуть</button></div>` : ''}
+      <div class="alts-h mt">${ic('refresh', 'sm')} Аналоги — нажми, чтобы заменить</div>${altsBlock(item.ex, 'swap')}
     </div>
     <div class="card wb">${woSets(item, ex, cur)}</div>
     <details class="how wc" ${UI.howOpen ? 'open' : ''} data-act-toggle="how"><summary>${ic('book')} Техника выполнения ${ic('down', 'sm')}</summary><div class="in">${howBlock(ex)}</div></details>
@@ -1948,6 +2047,22 @@ function startWorkout(pid, extraEx) {
   if (DB.active) confirmBox('Уже идёт тренировка «' + esc(DB.active.name) + '». Начать новую? Текущая будет потеряна.', 'Начать новую', go2);
   else go2();
 }
+// заменить текущее упражнение аналогом; выполненные подходы остаются за исходным
+function swapExercise(altId) {
+  const a = DB.active, it = a.items[a.cur], cur = exById(it.ex), alt = exById(altId);
+  if (!alt || !cur || altId === it.ex) return;
+  const done = it.sets.filter(s => s.done), origId = it.orig || it.ex;
+  const origT = it.origT || { min: it.min, max: it.max, rest: it.rest, note: it.note || '' };
+  const back = altId === origId, same = cur.k === alt.k;
+  const t = back ? origT : same ? { min: it.min, max: it.max, rest: it.rest } : { min: alt.d[1], max: alt.d[2], rest: alt.d[3] };
+  const fresh = makeItem(alt, Math.max(1, it.sets.length - done.length), t.min, t.max, t.rest, back ? origT.note : '');
+  if (!back) { fresh.orig = origId; fresh.origT = origT; }
+  if (a.sw && a.sw.i === a.cur) a.sw = null;
+  if (done.length) { it.sets = done; a.items.splice(a.cur + 1, 0, fresh); a.cur++; }
+  else a.items[a.cur] = fresh;
+  save(); render();
+  toast(back ? `Вернули «${alt.n}»` : done.length ? `«${alt.n}» — добавлено после выполненных подходов` : `Заменено на «${alt.n}»`);
+}
 function curItem() { const a = DB.active; return a && a.items[a.cur]; }
 function startRest(sec, label) {
   const a = DB.active; if (!a || !sec) return;
@@ -2087,6 +2202,7 @@ const ACT = {
   'set-rm': () => { const it2 = curItem(); if (it2.sets.length > 1) it2.sets.pop(); save(); render(); },
   'apply-w': el => { curItem().sets.forEach(s => { if (!s.done) s.w = +el.dataset.w; }); save(); render(); toast('Вес обновлён'); },
   sw: el => toggleSW(+el.dataset.n),
+  'wo-swap': el => swapExercise(el.dataset.id),
   'rest-start': () => startRest(curItem().rest, nextSetLabel()),
   'rest-add': el => { const r = DB.active.rest; r.end += +el.dataset.s * 1000; r.total = Math.max(r.total, (r.end - Date.now()) / 1000); if (r.end <= Date.now()) DB.active.rest = null; save(); renderDock(); },
   'rest-skip': () => { DB.active.rest = null; save(); renderDock(); },
